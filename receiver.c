@@ -14,8 +14,10 @@
 #define INT_SIZE BYTE_SIZE * 4
 
 #define DEBUG 0
+#define SLP 0
 
 #define DBG(expr) if (DEBUG) {expr}
+#define SLEEP if (SLP) {sleep(1);}
 
 unsigned count = 0;
 unsigned is_read = 0;
@@ -36,7 +38,7 @@ void term_handler(int signal) {
 }
 
 void usr1_handler(int signal) {
-    //DBG(fprintf(stderr, "0");)
+    DBG(fprintf(stderr, "0\n");)
     if (is_read == 0) {
         input_size = input_size << 1;
     }
@@ -46,7 +48,7 @@ void usr1_handler(int signal) {
     }
 
     if (count == INT_SIZE - 1 && is_read == 0) {
-        //DBG(fprintf(stderr, "\nSize received: %d\n", input_size);)
+        DBG(fprintf(stderr, "\nSize received: %d\n", input_size);)
         buf = (char*) calloc(input_size, sizeof(char));
         assert(buf != NULL);
         is_read  = 1;
@@ -55,7 +57,7 @@ void usr1_handler(int signal) {
     }
 
     if (count == BYTE_SIZE - 1 && is_read == 1) {
-        //DBG(fprintf(stderr, "\nByte received: %c\n", current_byte);)
+        DBG(fprintf(stderr, "\nByte received: %c\n", current_byte);)
         buf[current_len] = current_byte;
         current_len++;
         count = 0;
@@ -70,12 +72,10 @@ void usr1_handler(int signal) {
          count++;
     }
 
-    
-    //printf("signal received!\n");
 }
 
 void usr2_handler(int signal) {
-    //DBG(fprintf(stderr, "1");)
+    DBG(fprintf(stderr, "1\n");)
     if (is_read == 0) {
         input_size = input_size << 1;
         input_size++;
@@ -87,7 +87,7 @@ void usr2_handler(int signal) {
     }
 
     if (count == INT_SIZE - 1 && is_read == 0) {
-        //DBG(fprintf(stderr, "\nSize received: %d\n", input_size);)
+        DBG(fprintf(stderr, "\nSize received: %d\n", input_size);)
         buf = (char*) calloc(input_size, sizeof(char));
         assert(buf != NULL);
         is_read  = 1;
@@ -96,8 +96,8 @@ void usr2_handler(int signal) {
     }
 
      if (count == BYTE_SIZE - 1 && is_read == 1) {
-       //DBG(fprintf(stderr, "\nByte received: %c\n", current_byte);)
-       //fprintf(stdout, "%c", current_byte);
+       DBG(fprintf(stderr, "\nByte received: %c\n", current_byte);)
+       fprintf(stdout, "%c", current_byte);
        buf[current_len] = current_byte;
        current_len++;
         count = 0;
@@ -111,7 +111,6 @@ void usr2_handler(int signal) {
     if (count < BYTE_SIZE && is_read == 1) {
          count++;
     }
-    //printf("signal received!\n");
 }
 
 
@@ -123,7 +122,6 @@ int main (int argc, char** argv) {
     fd = open(file, O_WRONLY | O_CREAT, 0666);
     assert(fd > 0);
 
-
     int pid = getpid();
     fprintf(stdout, "PID: %d\n", pid);
 
@@ -131,7 +129,34 @@ int main (int argc, char** argv) {
     signal(SIGUSR2, &usr2_handler);
     signal(SIGTERM, &term_handler);
 
+    int res = -1;
+    sigset_t waitset;
+    siginfo_t siginfo;
+
+    sigemptyset(&waitset);
+    sigaddset(&waitset, SIGUSR1);
+    sigaddset(&waitset, SIGUSR2);
+    res = sigprocmask(SIG_BLOCK, &waitset, NULL);
+    if (res == -1) {
+        DBG(fprintf(stderr, "Cannot block signals\n");)
+        exit(-1);
+
+    }
+
     while (1) {
+        res = sigwaitinfo(&waitset, &siginfo);
+        assert(res != -1);
+        if (res == SIGUSR1) {
+            DBG(fprintf(stderr, "SIGUSR1 received!\n");)
+            usr1_handler(SIGUSR1);
+        } else if (res == SIGUSR2) {
+            DBG(fprintf(stderr, "SIGUSR2 received!\n");)
+            usr2_handler(SIGUSR2);
+        }
+
+        SLEEP
+        DBG(fprintf(stderr, "Sending response to %d\n", siginfo.si_pid);)
+        kill(siginfo.si_pid, SIGUSR1);
     }
 
     return 0;

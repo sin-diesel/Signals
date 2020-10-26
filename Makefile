@@ -2,4 +2,3 @@
 all:
 	gcc transmitter.c -o transmitter
 	gcc receiver.c -o receiver
-	rm -f output.txt
