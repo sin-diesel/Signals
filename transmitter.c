@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h> 
+#include <sys/time.h>
 #include <unistd.h>
 #include <assert.h>
 #include <fcntl.h>
@@ -14,15 +15,17 @@
 #define DEBUG 0
 #define SLP 0
 
-#define DBG(expr) if (DEBUG) {expr}
+#define DBG(expr) if (DEBUG) {expr;}
 #define SLEEP if (SLP) {sleep(1);}
 
 
+void send_data(char* buf, int buf_size, int pid) {
 
-void to_bits(char* buf, int buf_size, int pid) {
+    // time_t start;
+    // time(&start);
 
-    time_t start;
-    time(&start);
+    struct timeval begin, end;
+    gettimeofday(&begin, 0);
 
     int res = -1;
     sigset_t waitset;
@@ -48,42 +51,30 @@ void to_bits(char* buf, int buf_size, int pid) {
             if (bit == 0) {
                 res = kill(pid, SIGUSR1);
                 assert(res != -1);
-                DBG(fprintf(stderr, "Sending signal 0!\n");)
+                DBG(fprintf(stderr, "Sending signal 0!\n"))
             } else {
                 res = kill(pid, SIGUSR2);
                 assert(res != -1);
-                DBG(fprintf(stderr, "Sending signal 1!\n");)
+                DBG(fprintf(stderr, "Sending signal 1!\n"))
             }
              res = sigwaitinfo(&waitset, &siginfo);
              assert(res != -1);
-             DBG(fprintf(stderr, "Received responce!\n");)
+             DBG(fprintf(stderr, "Received responce!\n"))
         }
     }
 
     DBG(fprintf(stderr, "\n");)
     kill(pid, SIGTERM);
 
-    time_t end;
-    time(&end);
+    // time_t end;
+    // time(&end);
+    gettimeofday(&end, 0);
 
-    unsigned speed = buf_size / difftime(end, start);
-    fprintf(stdout, "Speed: %u Bytes/sec\n", speed);
+
+    fprintf(stdout, "Begin time: %ld end time: %ld buf size: %d\n", begin.tv_usec, end.tv_usec, buf_size);
+    double speed = 1.0 * buf_size / (end.tv_usec - begin.tv_usec);
+    fprintf(stdout, "Speed: %lg Bytes/sec\n", speed * 1000000);
 }
-
-// void send_size_queued(int size, int pid) {
-//     union sigval data;
-//     data.sival_int = size;
-//     sigqueue(pid, SIGUSR1, data);
-//}
-
-// void send_queued(char* buf, int buf_size, int pid) {
-//     for (int i = 0; i < buf_size; ++i) {
-//         char byte = buf[i];
-//         union sigval data;
-//         data.sival_int = byte;
-//         sigqueue(pid, SIGUSR1, data);
-//     }
-// }
 
 void send_size(int input_size, int pid) {
 
@@ -110,15 +101,15 @@ void send_size(int input_size, int pid) {
         if (bit == 0) {
             res = kill(pid, SIGUSR1);
             assert(res != -1);
-            DBG(fprintf(stderr, "Sending signal 0!\n");)
+            DBG(fprintf(stderr, "Sending signal 0!\n"))
         } else {
             res = kill(pid, SIGUSR2);
             assert(res != -1);
-            DBG(fprintf(stderr, "Sending signal 1!\n");)
+            DBG(fprintf(stderr, "Sending signal 1!\n"))
         }
             res = sigwaitinfo(&waitset, &siginfo);
             assert(res != -1);
-            DBG(fprintf(stderr, "Received responce!\n");)
+            DBG(fprintf(stderr, "Received responce!\n"))
     }
     DBG(fprintf(stderr, "\n");)
 }
@@ -148,7 +139,7 @@ int main (int argc, char** argv) {
     buf[input_size] = '\0';
 
     send_size(input_size, pid);
-    to_bits(buf, input_size, pid);
+    send_data(buf, input_size, pid);
 
     close(fd);
     return 0;
