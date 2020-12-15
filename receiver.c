@@ -23,10 +23,11 @@
 #define DBG(expr) if (DEBUG) {expr;}
 #define SLEEP if (SLP) {sleep(1);}
 
-
+int packs = 0;
 unsigned count = 0;
 unsigned is_read = 0;
-unsigned input_size = 0;
+int current_size;
+unsigned input_size = -1;
 char* buf = NULL;
 char current_byte = 0;
 unsigned current_len = 0;
@@ -77,8 +78,19 @@ void handler(int bit) {
 }
 
 static void handler_1(int sig, siginfo_t *si, void *ucontext) {
-    //si->si_value; 
-    printf("Size received: %d\n", si->si_value.sival_int);
+    if (input_size == -1) {
+        input_size = si->si_value.sival_int;
+        kill(si->si_pid, SIGUSR2);
+    } else { 
+        if (buf == NULL) {
+            buf = (char*) calloc(input_size, sizeof(char));
+            assert(buf);
+        }
+        memcpy(buf + packs * sizeof(int), &(si->si_value.sival_int), sizeof(int));
+        ++packs;
+        current_size += sizeof(int);
+        kill(si->si_pid, SIGUSR2);
+    }
 }
 
 
@@ -101,83 +113,18 @@ int main (int argc, char** argv) {
     sa.sa_flags = SA_SIGINFO; /* Important. */
 
     sigaction(SIGUSR1, &sa, NULL);
-
-//-------------------- setting signals for appropriate handling
-    sigset_t waitset;
-    siginfo_t siginfo;
-
-    sigemptyset(&waitset);
-    sigaddset(&waitset, SIGUSR1);
-    sigaddset(&waitset, SIGUSR2);
-    sigaddset(&waitset, SIGTERM);
-
-    res = sigprocmask(SIG_BLOCK, &waitset, NULL);
-    if (res == -1) {
-        DBG(fprintf(stderr, "Cannot block signals\n"))
-        exit(-1);
-    }
-
-    int first_received = 0;
-    int transmitter_pid = 0;
-    struct timespec susp;
-    susp.tv_sec = 2;
-    susp.tv_nsec = 0;
-
-    int ready = 0;
-
-    while (ready != 1) {
-        res = sigtimedwait(&waitset, &siginfo, &susp); // waiting for transmitter
-        if (res > 0) {
-            ready = 1;
-            kill(siginfo.si_pid, SIGUSR1);
-        }
-    }
-
+    
     while (1) {
-        DBG(fprintf(stderr, "Sending response to %d\n", siginfo.si_pid))
-        res = sigtimedwait(&waitset, &siginfo, &susp); // waiting for transmitter
-        if (res < 0) {
-            fprintf(stderr, "Time interval exceeded!\n");
-            exit(-1);
+        if (current_size >= input_size) {
+            buf[input_size] = '\0';
+            fprintf(stdout,"Input_size: %d\n", input_size);
+            fprintf(stdout,"End of transmission.\n");
+            int n_write = write(fd, buf, input_size * sizeof(char)); 
+            assert(n_write == input_size);
+            free(buf);
+            close(fd);
+            exit(0);
         }
-
-        if (first_received == 0) {
-            first_received = 1;
-            transmitter_pid = siginfo.si_pid;
-        } else {
-            if (transmitter_pid != siginfo.si_pid) {
-                kill(siginfo.si_pid, SIGTERM);
-            }
-        }
-
-    //     assert(res != -1);
-
-    //     switch(res) {
-    //         case SIGUSR1:
-    //             DBG(fprintf(stderr, "SIGUSR1 received!\n")) // manually passing control to handlers
-    //             handler(0);
-    //         break;
-    //         case SIGUSR2:
-    //             DBG(fprintf(stderr, "SIGUSR2 received!\n"))
-    //             handler(1);
-    //         break;
-    //         case SIGTERM:
-    //             buf[input_size] = '\0';
-    //             fprintf(stdout,"Input_size: %d\n", input_size);
-    //             fprintf(stdout,"End of transmission.\n");
-    //             int n_write = write(fd, buf, input_size * sizeof(char)); 
-    //             assert(n_write == input_size);
-    //             free(buf);
-    //             close(fd);
-    //             exit(0);
-    //         break;
-    //     }
-
-    //     SLEEP
-        DBG(fprintf(stderr, "Sending response to %d\n", siginfo.si_pid))
-        kill(transmitter_pid, SIGUSR1);
-    // }
     }
-
     return 0;
 }
