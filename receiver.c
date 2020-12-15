@@ -79,16 +79,16 @@ void handler(int bit) {
 
 static void handler_1(int sig, siginfo_t *si, void *ucontext) {
     if (input_size == -1) {
-        input_size = si->si_value.sival_int;
+        memcpy(&input_size, &(si->si_value.sival_ptr), sizeof(void*));
         kill(si->si_pid, SIGUSR2);
     } else { 
         if (buf == NULL) {
             buf = (char*) calloc(input_size, sizeof(char));
             assert(buf);
         }
-        memcpy(buf + packs * sizeof(int), &(si->si_value.sival_int), sizeof(int));
+        memcpy(buf + packs * sizeof(void*), &(si->si_value.sival_ptr), sizeof(void*));
         ++packs;
-        current_size += sizeof(int);
+        current_size += sizeof(void*);
         kill(si->si_pid, SIGUSR2);
     }
 }

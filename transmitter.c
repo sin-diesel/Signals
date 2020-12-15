@@ -40,8 +40,8 @@ void send_data(char* buf, int buf_size, int pid) {
     
     clock_t begin = clock();
 
-    for (int i = 0; i < buf_size; i = i + sizeof(int)) {
-        memcpy(&(sv.sival_int), buf + i, sizeof(int));
+    for (int i = 0; i < buf_size; i = i + sizeof(void*)) {
+        memcpy(&(sv.sival_ptr), buf + i, sizeof(void*));
         sigqueue(pid, SIGUSR1, sv);
         res = sigtimedwait(&waitset, &siginfo, &susp);
         ++count;
@@ -71,7 +71,7 @@ void send_size(int input_size, int pid) {
         exit(-1);
     }
     
-    sv.sival_int = input_size;
+    memcpy(&(sv.sival_ptr), &input_size, sizeof(void*));
     sigqueue(pid, SIGUSR1, sv);
     res = sigtimedwait(&waitset, &siginfo, &susp);
 }
